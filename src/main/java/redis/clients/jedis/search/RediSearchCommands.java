@@ -57,6 +57,8 @@ public interface RediSearchCommands {
 
   SearchResult ftSearch(String indexName, String query);
 
+  SearchResult ftHybrid(String indexName, FTHybridParams params);
+
   SearchResult ftSearch(String indexName, String query, FTSearchParams params);
 
   SearchResult ftSearch(String indexName, Query query);

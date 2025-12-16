@@ -1292,6 +1292,47 @@ public class SearchWithParamsTest extends RedisModuleCommandsTestBase {
   }
 
   @Test
+  @SinceRedisVersion("8.4.0")
+  public void hybridKnnSearch() {
+    String hybridIndex = "hybrid-index";
+    assertOK(client.ftCreate(hybridIndex,
+        TextField.of("title"),
+        VectorField.builder().fieldName("vec")
+            .algorithm(VectorAlgorithm.HNSW)
+            .addAttribute("TYPE", "FLOAT32")
+            .addAttribute("DIM", 2)
+            .addAttribute("DISTANCE_METRIC", "L2")
+            .build()));
+
+    byte[] vecA = RediSearchUtil.toByteArray(new float[]{1.0f, 1.0f});
+    byte[] vecB = RediSearchUtil.toByteArray(new float[]{2.0f, 2.0f});
+    byte[] vecC = RediSearchUtil.toByteArray(new float[]{3.0f, 3.0f});
+
+    client.hset("hyb:1", toMap("title", "laptop basic"));
+    client.hset("hyb:1".getBytes(), "vec".getBytes(), vecA);
+    client.hset("hyb:2", toMap("title", "laptop advanced"));
+    client.hset("hyb:2".getBytes(), "vec".getBytes(), vecB);
+    client.hset("hyb:3", toMap("title", "laptop pro"));
+    client.hset("hyb:3".getBytes(), "vec".getBytes(), vecC);
+
+    byte[] query = RediSearchUtil.toByteArray(new float[]{1.0f, 1.1f});
+    FTHybridParams params = new FTHybridParams()
+        .search("laptop")
+        .vsim("@vec", "q", query)
+        .knn(2, 20, "vector_score")
+        .limit(0, 2)
+        .dialect(SearchProtocol.DEFAULT_DIALECT);
+
+    SearchResult result = client.ftHybrid(hybridIndex, params);
+    assertEquals(2, result.getDocuments().size());
+    assertEquals("hyb:1", result.getDocuments().get(0).getId());
+    assertEquals("hyb:2", result.getDocuments().get(1).getId());
+
+    client.del("hyb:1", "hyb:2", "hyb:3");
+    client.ftDropIndex(hybridIndex);
+  }
+
+  @Test
   @SinceRedisVersion(value = "7.4.0", message = "no optional params before 7.4.0")
   public void vectorFieldParams() {
     Map<String, Object> attr = new HashMap<>();

@@ -3685,6 +3685,11 @@ public abstract class PipeliningBase
   }
 
   @Override
+  public Response<SearchResult> ftHybrid(String indexName, FTHybridParams searchParams) {
+    return appendCommand(commandObjects.ftHybrid(indexName, searchParams));
+  }
+
+  @Override
   public Response<SearchResult> ftSearch(String indexName, String query, FTSearchParams searchParams) {
     return appendCommand(commandObjects.ftSearch(indexName, query, searchParams));
   }

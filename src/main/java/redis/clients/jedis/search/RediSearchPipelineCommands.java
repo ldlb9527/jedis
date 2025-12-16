@@ -57,6 +57,8 @@ public interface RediSearchPipelineCommands {
 
   Response<SearchResult> ftSearch(String indexName, String query);
 
+  Response<SearchResult> ftHybrid(String indexName, FTHybridParams searchParams);
+
   Response<SearchResult> ftSearch(String indexName, String query, FTSearchParams searchParams);
 
   Response<SearchResult> ftSearch(String indexName, Query query);

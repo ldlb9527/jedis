@@ -3622,6 +3622,15 @@ public class CommandObjects {
         () -> new SearchResultBuilder(!query.getNoContent(), query.getWithScores(), true)));
   }
 
+  public final CommandObject<SearchResult> ftHybrid(String indexName, FTHybridParams params) {
+    FTHybridParams hybridParams = params == null ? new FTHybridParams() : params;
+    CommandArguments args = checkAndRoundRobinSearchCommand(SearchCommand.HYBRID, indexName)
+        .addParams(hybridParams.dialectOptional(searchDialect.get()));
+    return new CommandObject<>(args, getSearchResultBuilder(hybridParams.getReturnFieldDecodeMap(),
+        () -> new SearchResultBuilder(hybridParams.hasContent(), true, true,
+            hybridParams.getReturnFieldDecodeMap())));
+  }
+
   @Deprecated
   public final CommandObject<SearchResult> ftSearch(byte[] indexName, Query query) {
     if (protocol == RedisProtocol.RESP3) {

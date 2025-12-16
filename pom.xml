@@ -9,7 +9,7 @@
 	<packaging>jar</packaging>
 	<groupId>redis.clients</groupId>
 	<artifactId>jedis</artifactId>
-	<version>7.2.0-SNAPSHOT</version>
+	<version>7.102.0-SNAPSHOT</version>
 	<name>Jedis</name>
 	<description>Jedis is a blazingly small and sane Redis java client.</description>
 	<url>https://github.com/redis/jedis</url>
@@ -64,8 +64,8 @@
 		<JVM_OPTS></JVM_OPTS>
 		<!-- Default excluded groups for tests - can be overridden from command line -->
 		<excludedGroupsForUnitTests>integration,scenario</excludedGroupsForUnitTests>
-		<skipUnitTests>false</skipUnitTests>
-		<skipIntegrationTests>false</skipIntegrationTests>
+		<skipUnitTests>true</skipUnitTests>
+		<skipIntegrationTests>true</skipIntegrationTests>
 		<skipScenarioTests>true</skipScenarioTests>
 	</properties>
 

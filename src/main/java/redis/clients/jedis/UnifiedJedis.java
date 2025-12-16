@@ -4021,6 +4021,11 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   }
 
   @Override
+  public SearchResult ftHybrid(String indexName, FTHybridParams params) {
+    return executeCommand(commandObjects.ftHybrid(indexName, params));
+  }
+
+  @Override
   public SearchResult ftSearch(String indexName, String query, FTSearchParams params) {
     return executeCommand(commandObjects.ftSearch(indexName, query, params));
   }
