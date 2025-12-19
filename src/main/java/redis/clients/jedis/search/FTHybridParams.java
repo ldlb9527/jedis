@@ -19,6 +19,9 @@ public class FTHybridParams implements IParams {
   private String vectorParam;
   private Object vectorBlob;
   private final List<Object> vsimOptions = new ArrayList<>();
+  // VSIM 预过滤策略：POLICY [ADHOC_BF|BATCHES] [BATCH_SIZE x]
+  private Object policyKeyword;
+  private Integer policyBatchSize;
 
   private final List<Object> combineOptions = new ArrayList<>();
 
@@ -95,6 +98,36 @@ public class FTHybridParams implements IParams {
     return this;
   }
 
+  /**
+   * VSIM 子句中的预过滤表达式。
+   * 等价于在 VSIM 块内部追加 FILTER "expr"。
+   */
+  public FTHybridParams vsimFilter(String filter) {
+    if (filter != null) {
+      this.vsimOptions.add(FILTER);
+      this.vsimOptions.add(filter);
+    }
+    return this;
+  }
+
+  /**
+   * 预过滤策略：ADHOC_BF
+   */
+  public FTHybridParams policyAdhocBF() {
+    this.policyKeyword = ADHOC_BF;
+    this.policyBatchSize = null;
+    return this;
+  }
+
+  /**
+   * 预过滤策略：BATCHES，并可选设置批大小。
+   */
+  public FTHybridParams policyBatches(Integer batchSize) {
+    this.policyKeyword = BATCHES;
+    this.policyBatchSize = batchSize;
+    return this;
+  }
+
   public FTHybridParams knn(int k, Integer efRuntime, String scoreAlias) {
     vsimOptions.clear();
     vsimOptions.add(KNN);
@@ -114,11 +147,10 @@ public class FTHybridParams implements IParams {
       count += 2;
     }
 
-    // YIELD_SCORE_AS alias
+    // YIELD_SCORE_AS alias（别名不计入 count）
     if (scoreAlias != null) {
       vsimOptions.add(YIELD_SCORE_AS);
       vsimOptions.add(scoreAlias);
-      count += 2;
     }
 
     // 回填 count
@@ -146,7 +178,6 @@ public class FTHybridParams implements IParams {
     if (scoreAlias != null) {
       vsimOptions.add(YIELD_SCORE_AS);
       vsimOptions.add(scoreAlias);
-      count += 2;
     }
 
     vsimOptions.set(1, count);
@@ -173,7 +204,6 @@ public class FTHybridParams implements IParams {
     if (alias != null) {
       combineOptions.add(YIELD_SCORE_AS);
       combineOptions.add(alias);
-      count += 2;
     }
 
     combineOptions.set(1, count);
@@ -205,7 +235,6 @@ public class FTHybridParams implements IParams {
     if (alias != null) {
       combineOptions.add(YIELD_SCORE_AS);
       combineOptions.add(alias);
-      count += 2;
     }
 
     combineOptions.set(1, count);
@@ -320,6 +349,13 @@ public class FTHybridParams implements IParams {
     args.add(VSIM).add(vectorField).add(vectorParam);
     if (!vsimOptions.isEmpty()) {
       args.addObjects(vsimOptions);
+    }
+    // VSIM 预过滤策略（位于 VSIM 之后、COMBINE 之前）
+    if (policyKeyword != null) {
+      args.add(POLICY).add(policyKeyword);
+      if (policyBatchSize != null) {
+        args.add(BATCH_SIZE).add(policyBatchSize);
+      }
     }
 
     if (!combineOptions.isEmpty()) {

@@ -1,13 +1,7 @@
 package redis.clients.jedis.modules.search;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static redis.clients.jedis.util.AssertUtil.assertOK;
 import static redis.clients.jedis.util.RedisConditions.ModuleVersion.SEARCH_MOD_VER_80M3;
@@ -1292,47 +1286,6 @@ public class SearchWithParamsTest extends RedisModuleCommandsTestBase {
   }
 
   @Test
-  @SinceRedisVersion("8.4.0")
-  public void hybridKnnSearch() {
-    String hybridIndex = "hybrid-index";
-    assertOK(client.ftCreate(hybridIndex,
-        TextField.of("title"),
-        VectorField.builder().fieldName("vec")
-            .algorithm(VectorAlgorithm.HNSW)
-            .addAttribute("TYPE", "FLOAT32")
-            .addAttribute("DIM", 2)
-            .addAttribute("DISTANCE_METRIC", "L2")
-            .build()));
-
-    byte[] vecA = RediSearchUtil.toByteArray(new float[]{1.0f, 1.0f});
-    byte[] vecB = RediSearchUtil.toByteArray(new float[]{2.0f, 2.0f});
-    byte[] vecC = RediSearchUtil.toByteArray(new float[]{3.0f, 3.0f});
-
-    client.hset("hyb:1", toMap("title", "laptop basic"));
-    client.hset("hyb:1".getBytes(), "vec".getBytes(), vecA);
-    client.hset("hyb:2", toMap("title", "laptop advanced"));
-    client.hset("hyb:2".getBytes(), "vec".getBytes(), vecB);
-    client.hset("hyb:3", toMap("title", "laptop pro"));
-    client.hset("hyb:3".getBytes(), "vec".getBytes(), vecC);
-
-    byte[] query = RediSearchUtil.toByteArray(new float[]{1.0f, 1.1f});
-    FTHybridParams params = new FTHybridParams()
-        .search("laptop")
-        .vsim("@vec", "q", query)
-        .knn(2, 20, "vector_score")
-        .limit(0, 2)
-        .dialect(SearchProtocol.DEFAULT_DIALECT);
-
-    SearchResult result = client.ftHybrid(hybridIndex, params);
-    assertEquals(2, result.getDocuments().size());
-    assertEquals("hyb:1", result.getDocuments().get(0).getId());
-    assertEquals("hyb:2", result.getDocuments().get(1).getId());
-
-    client.del("hyb:1", "hyb:2", "hyb:3");
-    client.ftDropIndex(hybridIndex);
-  }
-
-  @Test
   @SinceRedisVersion(value = "7.4.0", message = "no optional params before 7.4.0")
   public void vectorFieldParams() {
     Map<String, Object> attr = new HashMap<>();
@@ -1639,5 +1592,58 @@ public class SearchWithParamsTest extends RedisModuleCommandsTestBase {
     assertEquals(3, stringMap.size());
     assertEquals("hello world", stringMap.get("title"));
     assertEquals(geo.getLongitude() + "," + geo.getLatitude(), stringMap.get("loc"));
+  }
+
+  @Test
+  @SinceRedisVersion("8.4.0")
+  public void hybridKnnSearchWithPreFilterAndPolicy() {
+    String hybridIndex2 = "hybrid-index-policy";
+    assertOK(client.ftCreate(hybridIndex2,
+            redis.clients.jedis.search.schemafields.TextField.of("title"),
+            redis.clients.jedis.search.schemafields.VectorField.builder().fieldName("vec")
+                    .algorithm(VectorAlgorithm.HNSW)
+                    .addAttribute("TYPE", "FLOAT32")
+                    .addAttribute("DIM", 2)
+                    .addAttribute("DISTANCE_METRIC", "L2")
+                    .build()));
+
+    byte[] v1 = redis.clients.jedis.search.RediSearchUtil.toByteArray(new float[]{1.0f, 1.0f});
+    byte[] v2 = redis.clients.jedis.search.RediSearchUtil.toByteArray(new float[]{1.9f, 2.1f});
+    byte[] v3 = redis.clients.jedis.search.RediSearchUtil.toByteArray(new float[]{3.0f, 3.0f});
+
+    client.hset("hybpf:1", toMap("title", "smartphone basic"));
+    client.hset("hybpf:1".getBytes(), "vec".getBytes(), v1);
+    client.hset("hybpf:2", toMap("title", "smartphone advanced"));
+    client.hset("hybpf:2".getBytes(), "vec".getBytes(), v2);
+    client.hset("hybpf:3", toMap("title", "laptop pro"));
+    client.hset("hybpf:3".getBytes(), "vec".getBytes(), v3);
+
+    byte[] query = redis.clients.jedis.search.RediSearchUtil.toByteArray(new float[]{1.0f, 1.05f});
+    FTHybridParams params = new FTHybridParams()
+            .search("smartphone")
+            .vsim("@vec", "q", query)
+            .knn(2, 200, "vscore")                  // YIELD_SCORE_AS 别名不计入 count
+            .vsimFilter("@title:smartphone")        // VSIM 预过滤
+            .policyBatches(64)                      // 预过滤策略（BATCHES + 可选批大小）
+            .combineRrf(50, 80.0, "hybrid_score")   // COMBINE RRF，别名不计入 count
+            .loadField("title")
+            .loadField("vscore")
+            .loadField("hybrid_score")
+            .sortBy("hybrid_score", redis.clients.jedis.search.SearchProtocol.SearchKeyword.DESC)
+            .limit(0, 2)
+            .dialect(redis.clients.jedis.search.SearchProtocol.DEFAULT_DIALECT);
+
+    redis.clients.jedis.search.SearchResult result = client.ftHybrid(hybridIndex2, params);
+    assertEquals(2, result.getDocuments().size());
+    // 预过滤应只命中 "smartphone" 文档
+    List<redis.clients.jedis.search.Document> docs = result.getDocuments();
+    assertTrue(docs.stream().allMatch(d -> d.getId().startsWith("hybpf:1") || d.getId().startsWith("hybpf:2")));
+    // 验证返回字段
+    assertNotNull(docs.get(0).get("title"));
+    assertNotNull(docs.get(0).get("vscore"));
+    assertNotNull(docs.get(0).get("hybrid_score"));
+
+    client.del("hybpf:1", "hybpf:2", "hybpf:3");
+    client.ftDropIndex(hybridIndex2);
   }
 }
